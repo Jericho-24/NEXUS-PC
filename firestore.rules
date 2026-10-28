@@ -1,0 +1,104 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && request.auth.uid == 'Fwt7JA6ln2cf5BZC4e9kb9GR6yE2';
+    }
+
+    match /products/{productId} {
+      allow read: if isAdmin() || resource.data.published == true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /users/{userId} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == userId);
+      allow create: if signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.uid == userId
+        && request.resource.data.keys().hasOnly([
+          'uid', 'name', 'email', 'phone', 'createdAt', 'updatedAt'
+        ]);
+      allow update: if signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.uid == userId
+        && request.resource.data.keys().hasOnly([
+          'uid', 'name', 'email', 'phone', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['name', 'phone', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    match /carts/{userId} {
+      allow read: if signedIn() && request.auth.uid == userId;
+      allow create, update: if signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly(['items', 'updatedAt']);
+      allow delete: if signedIn() && request.auth.uid == userId;
+    }
+
+    match /orders/{orderId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+
+    match /orderRequests/{requestId} {
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status == 'Pending approval'
+        && request.resource.data.keys().hasOnly([
+          'uid', 'customer', 'shippingAddress', 'paymentMethod', 'items',
+          'status', 'createdAt'
+        ])
+        && request.resource.data.customer.keys().hasOnly(['name', 'email', 'phone'])
+        && request.resource.data.customer.name is string
+        && request.resource.data.customer.name.size() > 0
+        && request.resource.data.customer.name.size() <= 100
+        && request.resource.data.customer.email is string
+        && request.resource.data.customer.email.size() <= 254
+        && request.resource.data.customer.phone is string
+        && request.resource.data.customer.phone.size() > 0
+        && request.resource.data.customer.phone.size() <= 30
+        && request.resource.data.shippingAddress.keys().hasOnly([
+          'address', 'city', 'province', 'postalCode', 'country'
+        ])
+        && request.resource.data.shippingAddress.address is string
+        && request.resource.data.shippingAddress.address.size() > 0
+        && request.resource.data.shippingAddress.address.size() <= 240
+        && request.resource.data.shippingAddress.city is string
+        && request.resource.data.shippingAddress.city.size() > 0
+        && request.resource.data.shippingAddress.city.size() <= 100
+        && request.resource.data.shippingAddress.province is string
+        && request.resource.data.shippingAddress.province.size() > 0
+        && request.resource.data.shippingAddress.province.size() <= 100
+        && request.resource.data.shippingAddress.postalCode is string
+        && request.resource.data.shippingAddress.postalCode.size() > 0
+        && request.resource.data.shippingAddress.postalCode.size() <= 20
+        && request.resource.data.shippingAddress.country == 'Philippines'
+        && request.resource.data.paymentMethod in [
+          'Cash on Delivery', 'GCash (manual demo)'
+        ]
+        && request.resource.data.items is list
+        && request.resource.data.items.size() > 0
+        && request.resource.data.items.size() <= 30;
+      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow update: if isAdmin()
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'orderId', 'orderNumber', 'reviewedAt'])
+        && request.resource.data.status in ['Approved', 'Rejected'];
+      allow delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
