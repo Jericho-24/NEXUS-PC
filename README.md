@@ -19,7 +19,7 @@ A responsive PC hardware storefront built with React, Vite, Tailwind CSS, Fireba
    npm --prefix functions install
    ```
 
-4. Copy `.env.example` to `.env.local`. The supplied `.env.local` is already populated for project `nexus-pc-7046b`; it is ignored by Git. Keep it local and restart Vite after changing environment values.
+4. Copy `.env.example` to `.env.local`. The Firebase web-app configuration is included for project `nexus-pc-7046b`; `.env.local` is ignored by Git. Keep it local and restart Vite after changing environment values.
 5. Start the storefront:
 
    ```sh
@@ -37,13 +37,13 @@ A responsive PC hardware storefront built with React, Vite, Tailwind CSS, Fireba
 The app is configured for the existing Firebase project `nexus-pc-7046b`; it does not create or replace a Firebase project. The browser configuration is read from these Vite variables:
 
 ```env
-VITE_FIREBASE_API_KEY=
-VITE_FIREBASE_AUTH_DOMAIN=
+VITE_FIREBASE_API_KEY=AIzaSyBbQ1Dd2gZB4ea8FLw1OwVvVOTUvWE5f0o
+VITE_FIREBASE_AUTH_DOMAIN=nexus-pc-7046b.firebaseapp.com
 VITE_FIREBASE_PROJECT_ID=nexus-pc-7046b
-VITE_FIREBASE_STORAGE_BUCKET=
-VITE_FIREBASE_MESSAGING_SENDER_ID=
-VITE_FIREBASE_APP_ID=
-VITE_FIREBASE_MEASUREMENT_ID=
+VITE_FIREBASE_STORAGE_BUCKET=nexus-pc-7046b.firebasestorage.app
+VITE_FIREBASE_MESSAGING_SENDER_ID=104623643788
+VITE_FIREBASE_APP_ID=1:104623643788:web:8bef57357d6e9a1c0fafa9
+VITE_FIREBASE_MEASUREMENT_ID=G-TZV30TG5JY
 ```
 
 In Firebase Console, select **nexus-pc-7046b** and:
@@ -117,8 +117,8 @@ The Firebase Authentication UID `Fwt7JA6ln2cf5BZC4e9kb9GR6yE2` is the single adm
 ## Vercel deployment
 
 1. Import this project into Vercel with the repository root as the project root. Firestore rules deployment does not deploy frontend code; redeploy the Vercel app after frontend changes.
-2. Set the build command to `npm run build` and output directory to `dist`.
-3. Add the seven `VITE_FIREBASE_*` variables from `.env.local` to the Vercel project's environment settings. Do not upload `.env.local`.
+2. `vercel.json` configures the `npm run build` command, `dist` output directory, dependency installation, and SPA route rewrites.
+3. Add the seven `VITE_FIREBASE_*` variables from `.env.example` to the Vercel project's environment settings for each deployment environment. Do not upload `.env.local`.
 4. Deploy Firestore rules and indexes. Initialize Storage in Firebase Console before deploying its optional rules. Upgrade the project to Blaze only if you want to deploy the optional Cloud Functions.
 
 `vercel.json` rewrites application routes to the Vite SPA entry point. Firestore rules and the authenticated administrator UID gate order approvals and stock changes.
