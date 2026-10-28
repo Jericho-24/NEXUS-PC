@@ -155,19 +155,12 @@ export function AdminAnalyticsPage() {
   deliveredUnitsByProduct.forEach((units, productId) => {
     byProduct.get(productId).units = units;
   });
-  const productById = new Map(products.map((product) => [product.id, product]));
-  const unitsSold = products.reduce((sum, product) => {
-    const storedCount = Number(product.soldCount);
-    const legacyCount = deliveredUnitsByProduct.get(product.id) || 0;
-    return sum + (Number.isFinite(storedCount) ? Math.max(0, storedCount) : legacyCount);
-  }, 0);
+  const unitsSold = [...deliveredUnitsByProduct.values()].reduce((sum, units) => sum + units, 0);
   const bestProducts = [...byProduct.entries()]
     .map(([productId, sales]) => {
-      const product = productById.get(productId);
-      const storedCount = Number(product?.soldCount);
       return {
         ...sales,
-        units: Number.isFinite(storedCount) ? Math.max(0, storedCount) : deliveredUnitsByProduct.get(productId) || 0,
+        units: deliveredUnitsByProduct.get(productId) || 0,
       };
     })
     .sort((a, b) => b.units - a.units)
