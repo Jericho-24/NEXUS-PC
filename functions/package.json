@@ -3,6 +3,7 @@
   "scripts": {
     "build": "tsc",
     "seed:products": "node scripts/seed-products.cjs",
+    "reset:sold-counts": "node scripts/reset-sold-counts.cjs",
     "serve": "npm run build && firebase emulators:start --only functions",
     "shell": "npm run build && firebase functions:shell",
     "start": "npm run shell",

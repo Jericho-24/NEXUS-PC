@@ -61,7 +61,7 @@ const STATUS_NEXT = {
   Confirmed: ["Processing", "Cancelled"],
   Processing: ["Shipped", "Cancelled"],
   Shipped: ["Delivered"],
-  Delivered: [],
+  Delivered: ["Cancelled"],
   Cancelled: [],
 };
 const CHART_COLORS = ["#37d5f2", "#2a91ff", "#7869f7", "#58d2a3", "#f0ac55", "#f47575"];
@@ -139,14 +139,26 @@ export function AdminAnalyticsPage() {
   const byProduct = new Map();
   validOrders.forEach((order) => (order.items || []).forEach((item) => {
     const current = byProduct.get(item.productId) || { name: item.name, units: 0, revenue: 0 };
-    current.units += Number(item.quantity) || 0;
     current.revenue += Number(item.lineTotal) || 0;
     byProduct.set(item.productId, current);
   }));
+  const deliveredUnitsByProduct = new Map();
+  orders.filter((order) => order.status === "Delivered").forEach((order) => (order.items || []).forEach((item) => {
+    deliveredUnitsByProduct.set(
+      item.productId,
+      (deliveredUnitsByProduct.get(item.productId) || 0) + (Number(item.quantity) || 0),
+    );
+    if (!byProduct.has(item.productId)) {
+      byProduct.set(item.productId, { name: item.name, units: 0, revenue: 0 });
+    }
+  }));
+  deliveredUnitsByProduct.forEach((units, productId) => {
+    byProduct.get(productId).units = units;
+  });
   const productById = new Map(products.map((product) => [product.id, product]));
   const unitsSold = products.reduce((sum, product) => {
     const storedCount = Number(product.soldCount);
-    const legacyCount = byProduct.get(product.id)?.units || 0;
+    const legacyCount = deliveredUnitsByProduct.get(product.id) || 0;
     return sum + (Number.isFinite(storedCount) ? Math.max(0, storedCount) : legacyCount);
   }, 0);
   const bestProducts = [...byProduct.entries()]
@@ -155,7 +167,7 @@ export function AdminAnalyticsPage() {
       const storedCount = Number(product?.soldCount);
       return {
         ...sales,
-        units: Number.isFinite(storedCount) ? Math.max(0, storedCount) : sales.units,
+        units: Number.isFinite(storedCount) ? Math.max(0, storedCount) : deliveredUnitsByProduct.get(productId) || 0,
       };
     })
     .sort((a, b) => b.units - a.units)
@@ -172,7 +184,7 @@ export function AdminAnalyticsPage() {
   return (
     <div className="admin-page">
       <div className="admin-page-heading"><div><span className="eyebrow">DATA, NOT GUESSES</span><h1>Analytics</h1><p>Performance calculated from actual Firestore orders and catalog data.</p></div></div>
-      <div className="metric-grid analytics-metrics"><div className="metric-card"><div className="metric-card-top"><span>Gross revenue</span><CircleDollarSign size={18} /></div><strong>{formatPrice(totalRevenue)}</strong><small>Non-cancelled order totals · includes shipping</small></div><div className="metric-card"><div className="metric-card-top"><span>Orders placed</span><ClipboardList size={18} /></div><strong>{orders.length}</strong><small>{orders.filter((order) => order.status !== "Cancelled").length} non-cancelled</small></div><div className="metric-card"><div className="metric-card-top"><span>Units sold</span><Box size={18} /></div><strong>{unitsSold}</strong><small>Updated on approval; reduced if cancelled</small></div></div>
+      <div className="metric-grid analytics-metrics"><div className="metric-card"><div className="metric-card-top"><span>Gross revenue</span><CircleDollarSign size={18} /></div><strong>{formatPrice(totalRevenue)}</strong><small>Non-cancelled order totals · includes shipping</small></div><div className="metric-card"><div className="metric-card-top"><span>Orders placed</span><ClipboardList size={18} /></div><strong>{orders.length}</strong><small>{orders.filter((order) => order.status !== "Cancelled").length} non-cancelled</small></div><div className="metric-card"><div className="metric-card-top"><span>Units sold</span><Box size={18} /></div><strong>{unitsSold}</strong><small>Updated on delivery; reversed if cancelled</small></div></div>
       <div className="admin-dashboard-grid analytics-charts">
         <section className="admin-panel sales-panel"><div className="panel-heading"><div><span className="eyebrow">MONTHLY GROSS SALES</span><h2>Revenue over time</h2></div></div><div className="sales-chart"><ResponsiveContainer width="100%" height="100%"><AreaChart data={sales} margin={{ left: -16, right: 8, top: 14, bottom: 0 }}><defs><linearGradient id="analyticsFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#2788ff" stopOpacity={0.3} /><stop offset="95%" stopColor="#2788ff" stopOpacity={0} /></linearGradient></defs><CartesianGrid stroke="#202b37" vertical={false} /><XAxis dataKey="month" stroke="#718094" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} /><YAxis stroke="#718094" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} tickFormatter={(value) => `₱${Math.round(value / 1000)}k`} /><Tooltip content={<SalesTooltip />} /><Area type="monotone" dataKey="revenue" stroke="#2788ff" strokeWidth={2} fill="url(#analyticsFill)" /></AreaChart></ResponsiveContainer></div></section>
         <section className="admin-panel"><div className="panel-heading"><div><span className="eyebrow">ORDER ITEM REVENUE</span><h2>Category performance</h2></div></div>{categoryData.length ? <div className="category-chart"><ResponsiveContainer width="100%" height="100%"><BarChart data={categoryData} layout="vertical" margin={{ left: 3, right: 12, top: 4, bottom: 4 }}><XAxis type="number" hide /><YAxis type="category" dataKey="name" width={104} stroke="#8491a2" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} /><Tooltip content={<SalesTooltip />} /><Bar dataKey="revenue" radius={[0, 4, 4, 0]}>{categoryData.map((item, index) => <Cell key={item.name} fill={CHART_COLORS[index % CHART_COLORS.length]} />)}</Bar></BarChart></ResponsiveContainer></div> : <EmptyState title="No category data yet" message="Completed order items will be grouped here." />}</section>
@@ -233,7 +245,7 @@ export function AdminOrdersPage() {
           throw new Error(`Cannot change an order from ${current.status} to ${status}.`);
         }
         const items = Array.isArray(current.items) ? current.items : [];
-        const productRefs = status === "Cancelled"
+        const productRefs = status === "Cancelled" || status === "Delivered"
           ? items.map((item) => doc(db, "products", item.productId))
           : [];
         const productSnapshots = productRefs.length
@@ -243,11 +255,16 @@ export function AdminOrdersPage() {
           const product = productSnapshots[index].data();
           const quantity = Number(items[index].quantity);
           if (productSnapshots[index].exists && product && Number.isInteger(quantity) && quantity > 0) {
-            transaction.update(productRef, {
-              stock: Number(product.stock || 0) + quantity,
-              soldCount: Math.max(0, Number(product.soldCount || 0) - quantity),
-              updatedAt: serverTimestamp(),
-            });
+            const updates = { updatedAt: serverTimestamp() };
+            if (status === "Delivered") {
+              updates.soldCount = Number(product.soldCount || 0) + quantity;
+            } else {
+              updates.stock = Number(product.stock || 0) + quantity;
+              if (current.status === "Delivered") {
+                updates.soldCount = Math.max(0, Number(product.soldCount || 0) - quantity);
+              }
+            }
+            transaction.update(productRef, updates);
           }
         });
         transaction.update(orderRef, {
@@ -344,7 +361,6 @@ export function AdminOrdersPage() {
           const product = productSnapshots[index].data();
           transaction.update(productRef, {
             stock: product.stock - requestedItems[index].quantity,
-            soldCount: Number(product.soldCount || 0) + requestedItems[index].quantity,
             updatedAt: serverTimestamp(),
           });
         });

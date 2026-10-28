@@ -77,6 +77,16 @@ npm run seed:products
 
 The seed script creates the 20 demo catalog documents only when their IDs do not already exist. It skips existing products rather than overwriting price, stock, or product edits. The catalog source is `data/products.json`.
 
+Units sold increase only when an order is marked **Delivered**. Cancelling an undelivered order restores stock without affecting units sold; cancelling a delivered order also reverses its sold count. To reset existing product counts, authenticate with Google Application Default Credentials and run a dry run followed by the confirmed reset:
+
+```sh
+gcloud auth application-default login
+npm --prefix functions run reset:sold-counts
+npm --prefix functions run reset:sold-counts -- --apply
+```
+
+The reset targets `nexus-pc-7046b` by default; set `GCLOUD_PROJECT` to override it. The reset updates every product's `soldCount` to zero and cannot be undone.
+
 ## Firestore and Storage rules
 
 Review the rules, then deploy Firestore rules and required indexes:

@@ -137,7 +137,6 @@ export const createOrder = onCall(async (request) => {
     productRefs.forEach((ref, index) => {
       transaction.update(ref, {
         stock: snapshots[index].data()!.stock - items[index].quantity,
-        soldCount: FieldValue.increment(items[index].quantity),
         updatedAt: FieldValue.serverTimestamp(),
       });
     });
@@ -192,7 +191,7 @@ export const updateOrderStatus = onCall(async (request) => {
       Confirmed: ["Processing", "Cancelled"],
       Processing: ["Shipped", "Cancelled"],
       Shipped: ["Delivered"],
-      Delivered: [],
+      Delivered: ["Cancelled"],
       Cancelled: [],
     };
     if (!nextStatuses[currentStatus]?.includes(status)) {
@@ -200,7 +199,7 @@ export const updateOrderStatus = onCall(async (request) => {
     }
 
     const orderItems = Array.isArray(order.items) ? order.items : [];
-    if (status === "Cancelled") {
+    if (status === "Delivered" || status === "Cancelled") {
       const refs = orderItems.map((item: { productId: string }) =>
         db.collection("products").doc(item.productId));
       const productSnapshots: DocumentSnapshot[] = [];
@@ -209,14 +208,24 @@ export const updateOrderStatus = onCall(async (request) => {
       }
       refs.forEach((ref, index) => {
         const quantity = Number(orderItems[index].quantity);
-        if (productSnapshots[index].exists && Number.isInteger(quantity) && quantity > 0) {
-          const currentSold = Number(productSnapshots[index].data()?.soldCount) || 0;
-          transaction.update(ref, {
-            stock: FieldValue.increment(quantity),
-            soldCount: Math.max(0, currentSold - quantity),
-            updatedAt: FieldValue.serverTimestamp(),
-          });
+        const productSnapshot = productSnapshots[index];
+        if (!productSnapshot.exists || !Number.isInteger(quantity) || quantity <= 0) {
+          return;
         }
+
+        const updates: Record<string, unknown> = {
+          updatedAt: FieldValue.serverTimestamp(),
+        };
+        if (status === "Delivered") {
+          updates.soldCount = FieldValue.increment(quantity);
+        } else {
+          updates.stock = FieldValue.increment(quantity);
+          if (currentStatus === "Delivered") {
+            const currentSold = Number(productSnapshot.data()?.soldCount) || 0;
+            updates.soldCount = Math.max(0, currentSold - quantity);
+          }
+        }
+        transaction.update(ref, updates);
       });
     }
     transaction.update(orderRef, {
